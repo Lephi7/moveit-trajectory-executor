@@ -1,0 +1,8 @@
+live_pose:
+  ros__parameters:
+    pose_update_rate_ms: 50        # 50ms = 20Hz update rate
+    initialization_delay_ms: 1000  # Wait 1 second for MoveIt initialization
+    planning_group: "manipulator"   # Name of the planning group
+    position_precision: 5           # Number of decimal places for position
+    orientation_precision: 3        # Number of decimal places for orientation
+    show_joint_values: false        # Whether to display joint values

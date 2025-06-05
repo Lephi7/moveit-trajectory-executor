@@ -1,18 +1,11 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>moveit_trajectory_executor</name>
   <version>0.0.0</version>
-  <description>
-  A robot-agnostic ROS 2 node for printing the live Cartesian pose 
-  of a MoveIt 2-controlled manipulator. 
-  Compatible with simulated or real robots, 
-  regardless of vendor or connection type. 
-  Designed for integration alongside any MoveIt 2 instance. 
-  Further testing is ongoing.
-  </description>
-  <maintainer email="p.levesquejobs@gmail.com">lephi7</maintainer>
-  <license>Apache License 2.0</license>
+  <description>MoveIt2 trajectory executor package</description>
+  
+  <maintainer email="p.levesque7@gmail.com">lephi7</maintainer>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
@@ -23,7 +16,12 @@
   <depend>geometry_msgs</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
+  <depend>ament_index_cpp</depend>
   <depend>yaml-cpp</depend>
+  
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
