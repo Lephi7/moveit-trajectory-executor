@@ -38,6 +38,7 @@ add_executable(test_trajectory src/test_trajectory.cpp)
 add_executable(live_pose src/live_pose.cpp)
 add_executable(trajectory_action_server src/trajectory_action_server.cpp)
 add_executable(trajectory_action_client src/trajectory_action_client.cpp)
+add_executable(pose_recorder src/pose_recorder.cpp)
 
 # Link dependencies for test_trajectory
 ament_target_dependencies(test_trajectory
@@ -95,12 +96,27 @@ ament_target_dependencies(trajectory_action_client
   moveit_trajectory_msgs
 )
 
+# Link dependencies for pose_recorder
+ament_target_dependencies(pose_recorder
+  rclcpp
+  moveit_core
+  moveit_ros_planning_interface
+  moveit_ros_planning
+  geometry_msgs
+  ament_index_cpp
+)
+
+# Link yaml-cpp
+target_link_libraries(pose_recorder ${YAML_CPP_LIBRARIES})
+target_include_directories(pose_recorder PRIVATE ${YAML_CPP_INCLUDE_DIRS})
+
 # Install executables
 install(TARGETS
   test_trajectory
   live_pose
   trajectory_action_server
   trajectory_action_client
+  pose_recorder
   DESTINATION lib/${PROJECT_NAME}
 )
 
