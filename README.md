@@ -1,15 +1,17 @@
 # MoveIt2 Trajectory Executor
 
-A configurable ROS2 package for executing MoveIt2 trajectories and monitoring robot poses in real-time with comprehensive parameter management.
+A comprehensive ROS2 package for executing MoveIt2 trajectories with action-based interface, real-time monitoring, and predefined pose management.
 
 ## Overview
 
 This package provides utilities for:
-- Executing predefined trajectories using MoveIt2
-- Real-time pose monitoring of robot end-effector with configurable update rates
-- Comprehensive parameter management via YAML configuration files
-- Flexible launch file system with runtime parameter overrides
-- Kinematics parameter loading from configuration files
+- **Action-based trajectory execution** with live feedback and cancellation support
+- **Named pose management** for common robot positions (home, ready, pick, place, etc.)
+- **Real-time pose monitoring** of robot end-effector with configurable update rates
+- **Comprehensive parameter management** via YAML configuration files
+- **Flexible launch file system** with runtime parameter overrides
+- **Kinematics parameter loading** from configuration files
+- **Legacy trajectory execution** for simple use cases
 
 ## Package Structure
 
@@ -17,18 +19,23 @@ This package provides utilities for:
 moveit_trajectory_executor/
 ├── CMakeLists.txt                      # Build configuration
 ├── package.xml                         # Package dependencies
-├── README.md                           # This file
+├── README.md                           # This documentation
 ├── config/
 │   ├── kinematics.yaml                # Kinematics solver configuration
-│   └── live_pose_config.yaml          # Live pose monitoring parameters
+│   ├── live_pose_config.yaml          # Live pose monitoring parameters
+│   └── named_poses.yaml               # Predefined robot poses
 ├── include/
 │   └── moveit2_scripts/               # Header files (if any)
 ├── launch/
 │   ├── test_trajectory.launch.py      # Launch file for trajectory test
-│   └── live_pose_config.launch.py     # Launch file for live pose with config
+│   ├── live_pose_config.launch.py     # Launch file for live pose with config
+│   ├── action_server.launch.py        # Launch file for action server
+│   └── action_demo.launch.py          # Demo launch file with sequence
 └── src/
     ├── live_pose.cpp                  # Configurable real-time pose monitoring
-    └── test_trajectory.cpp            # Trajectory execution with YAML loading
+    ├── test_trajectory.cpp            # Legacy trajectory execution with YAML loading
+    ├── trajectory_action_server.cpp   # Action server for trajectory execution
+    └── trajectory_action_client.cpp   # Action client for sending goals
 ```
 
 ## Installation
@@ -74,7 +81,8 @@ sudo apt install -y \
     ros-humble-launch \
     ros-humble-launch-ros \
     ros-humble-ament-index-cpp \
-    ros-humble-ament-index-python
+    ros-humble-ament-index-python \
+    ros-humble-rclcpp-action
 ```
 
 #### 4. Build System Dependencies
@@ -130,10 +138,13 @@ rosdep install --from-paths src --ignore-src -r -y
 
 ## Dependencies
 
+### Core Dependencies
 - `rclcpp` - ROS2 C++ client library
+- `rclcpp_action` - ROS2 Action client/server library
 - `moveit_core` - MoveIt2 core functionality
 - `moveit_ros_planning_interface` - MoveIt2 planning interface
 - `moveit_ros_planning` - MoveIt2 planning components
+- `moveit_msgs` - MoveIt2 message types
 - `geometry_msgs` - Geometry message types
 - `tf2` & `tf2_ros` - Transform library
 - `ament_index_cpp` - Package resource location
@@ -141,23 +152,60 @@ rosdep install --from-paths src --ignore-src -r -y
 - `launch` & `launch_ros` - Launch system support
 - `ament_index_python` - Python package utilities
 
+### Custom Message Dependencies
+- **`moveit_trajectory_msgs`** - Custom action message package (to be published separately)
+  - Contains the `MoveToPose.action` definition
+  - Required for action-based trajectory execution
+  - Install from: *[Package location will be provided when published]*
+
 ## Executables
 
-### 1. test_trajectory
+### 1. trajectory_action_server ⭐ **PRIMARY**
 
-Executes a predefined trajectory with two target poses:
-- First pose: `[0.25, 0.25, 0.25]` with orientation `[0, 0, 0, 0.25]`
-- Second pose: Offset by `[+0.2, +0.2, 0]` from the first pose
+**Action server for trajectory execution with named pose support and live feedback.**
 
 **Features:**
-- Automatic kinematics parameter loading from `config/kinematics.yaml`
-- Sequential execution of two planned trajectories
-- Planning success/failure feedback
-- YAML configuration file integration
+- **Action-based interface** with goal/feedback/result pattern
+- **Named pose support** (home, ready, pick, place, inspect, custom poses)
+- **Live feedback** during planning and execution with progress updates
+- **Cancellation support** - stop trajectories mid-execution
+- **Error handling** with detailed error messages
+- **Configurable parameters** (planning timeout, feedback rate, etc.)
+- **YAML configuration loading** for kinematics and named poses
+- **Real-time pose feedback** during trajectory execution
 
-### 2. live_pose
+**Goal Parameters:**
+- `target_pose` - Custom pose coordinates
+- `named_pose` - Predefined pose name (e.g., "home", "ready")
+- `use_named_pose` - Boolean to use named pose instead of coordinates
+- `planning_group` - MoveIt planning group (default: "manipulator")
+- `planning_timeout` - Planning timeout in seconds
+- `execute_immediately` - Execute trajectory immediately after planning
 
-Real-time monitoring tool that continuously displays the robot's end-effector pose with extensive configurability.
+### 2. trajectory_action_client
+
+**Client for sending trajectory goals to the action server.**
+
+**Features:**
+- **Named pose goals** - Send robot to predefined positions
+- **Custom pose goals** - Send robot to specific coordinates
+- **Live feedback display** - Real-time progress and pose updates
+- **Command line arguments** - Specify target pose via arguments
+- **Error handling** - Graceful handling of planning/execution failures
+
+**Usage:**
+```bash
+# Go to named pose
+ros2 run moveit_trajectory_executor trajectory_action_client home
+ros2 run moveit_trajectory_executor trajectory_action_client ready
+
+# Default (goes to "home")
+ros2 run moveit_trajectory_executor trajectory_action_client
+```
+
+### 3. live_pose
+
+**Real-time monitoring tool for robot end-effector pose.**
 
 **Features:**
 - **Configurable update rates** (default: 50ms = 20Hz)
@@ -168,7 +216,35 @@ Real-time monitoring tool that continuously displays the robot's end-effector po
 - **Parameter loading** from YAML files or command line
 - **Runtime parameter changes** via ROS2 parameter system
 
+### 4. test_trajectory (Legacy)
+
+**Simple trajectory execution for testing purposes.**
+
+**Features:**
+- Executes predefined trajectory with two target poses
+- First pose: `[0.25, 0.25, 0.25]` with orientation `[0, 0, 0, 0.25]`
+- Second pose: Offset by `[+0.2, +0.2, 0]` from the first pose
+- Automatic kinematics parameter loading from `config/kinematics.yaml`
+- Sequential execution of two planned trajectories
+- Planning success/failure feedback
+
 ## Configuration Files
+
+### Named Poses Configuration (`config/named_poses.yaml`)
+
+```yaml
+named_poses:
+  home:
+    position:
+      x: 0.0
+      y: 0.0
+      z: 0.5
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      w: 1.0
+```
 
 ### Kinematics Configuration (`config/kinematics.yaml`)
 
@@ -205,6 +281,10 @@ live_pose:
 
 ## Building
 
+### Build Order
+
+This package depends on the custom action messages, so build in the correct order:
+
 ```bash
 # Source ROS2 environment
 source /opt/ros/humble/setup.bash
@@ -215,23 +295,82 @@ cd /path/to/your/ros2_workspace
 # Install dependencies (if not done already)
 rosdep install --from-paths src --ignore-src -r -y
 
-# Build the package
-colcon build --packages-select moveit_trajectory_executor
+# Build the custom message package first
+colcon build --packages-select moveit_trajectory_msgs
+source install/setup.bash
 
-# Source the workspace
+# Build the main package
+colcon build --packages-select moveit_trajectory_executor
+source install/setup.bash
+```
+
+### Clean Build
+```bash
+# If you encounter build issues
+rm -rf build/ install/ log/
+colcon build --packages-select moveit_trajectory_msgs moveit_trajectory_executor
 source install/setup.bash
 ```
 
 ## Usage
 
-### Running the Trajectory Test
+### Action-Based Trajectory Execution (Recommended)
 
+#### Start the Action Server
 ```bash
-# Option 1: Using launch file
-ros2 launch moveit_trajectory_executor test_trajectory.launch.py
+# Terminal 1: Start the action server
+ros2 run moveit_trajectory_executor trajectory_action_server
 
-# Option 2: Direct execution
-ros2 run moveit_trajectory_executor test_trajectory
+# Expected output:
+# [INFO] [trajectory_action_server]: ✔ Loaded kinematics.yaml parameters
+# [INFO] [trajectory_action_server]: ✔ Loaded 5 named poses
+# [INFO] [trajectory_action_server]: 📍 Available named poses:
+# [INFO] [trajectory_action_server]:   • home: [0.000, 0.000, 0.500]
+# [INFO] [trajectory_action_server]:   • ready: [0.300, 0.000, 0.300]
+# [INFO] [trajectory_action_server]:   • pick: [0.400, 0.200, 0.150]
+# [INFO] [trajectory_action_server]:   • place: [0.200, -0.300, 0.250]
+# [INFO] [trajectory_action_server]:   • inspect: [0.500, 0.000, 0.400]
+# [INFO] [trajectory_action_server]: 🚀 Trajectory Action Server ready!
+```
+
+#### Send Goals with Named Poses
+```bash
+# Terminal 2: Send goals to named poses
+ros2 run moveit_trajectory_executor trajectory_action_client home
+ros2 run moveit_trajectory_executor trajectory_action_client ready
+ros2 run moveit_trajectory_executor trajectory_action_client pick
+ros2 run moveit_trajectory_executor trajectory_action_client place
+ros2 run moveit_trajectory_executor trajectory_action_client inspect
+
+# Expected output:
+# [INFO] [trajectory_action_client]: 🚀 Sending goal to named pose 'home'...
+# [INFO] [trajectory_action_client]: ✅ Goal accepted by server, waiting for result
+# [INFO] [trajectory_action_client]: 📊 Planning trajectory to 'home'... | Progress: 10.0% | Pose: [0.123, 0.456, 0.789]
+# [INFO] [trajectory_action_client]: 📊 Executing trajectory... | Progress: 50.0% | Pose: [0.100, 0.200, 0.600]
+# [INFO] [trajectory_action_client]: 📊 Moving to 'home'... | Progress: 75.0% | Pose: [0.050, 0.100, 0.550]
+# [INFO] [trajectory_action_client]: 🎉 Goal succeeded! Execution time: 2.34 seconds
+```
+
+#### Send Goals with Command Line
+```bash
+# Named pose goal
+ros2 action send_goal /move_to_pose moveit_trajectory_msgs/action/MoveToPose "{
+  use_named_pose: true,
+  named_pose: 'ready',
+  planning_group: 'manipulator',
+  execute_immediately: true
+}" --feedback
+
+# Custom pose goal
+ros2 action send_goal /move_to_pose moveit_trajectory_msgs/action/MoveToPose "{
+  use_named_pose: false,
+  target_pose: {
+    position: {x: 0.3, y: 0.2, z: 0.4},
+    orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+  },
+  planning_group: 'manipulator',
+  execute_immediately: true
+}" --feedback
 ```
 
 ### Running Live Pose Monitor
@@ -253,6 +392,16 @@ ros2 run moveit_trajectory_executor live_pose --ros-args -p pose_update_rate_ms:
 ros2 launch moveit_trajectory_executor live_pose_config.launch.py pose_update_rate_ms:=25 show_joint_values:=true
 ```
 
+### Legacy Trajectory Execution
+
+```bash
+# Option 1: Using launch file
+ros2 launch moveit_trajectory_executor test_trajectory.launch.py
+
+# Option 2: Direct execution
+ros2 run moveit_trajectory_executor test_trajectory
+```
+
 ### Runtime Parameter Changes
 
 ```bash
@@ -266,13 +415,73 @@ ros2 param set /live_pose show_joint_values true
 ros2 param list /live_pose
 ```
 
+## Action Interface
+
+### Action Definition (`MoveToPose.action`)
+
+```yaml
+# Goal - The target pose to reach
+geometry_msgs/Pose target_pose
+string planning_group
+float64 planning_timeout
+bool execute_immediately
+string named_pose
+bool use_named_pose
+
+---
+
+# Result - Success status and final pose
+bool success
+string error_message
+geometry_msgs/Pose final_pose
+float64 execution_time
+
+---
+
+# Feedback - Live position updates during execution
+geometry_msgs/Pose current_pose
+string status
+float64 progress_percentage
+```
+
+### Action Topics
+
+```bash
+# Action server topics
+/move_to_pose/_action/send_goal          # Send goals
+/move_to_pose/_action/cancel_goal        # Cancel goals
+/move_to_pose/_action/get_result         # Get results
+/move_to_pose/_action/feedback           # Live feedback
+/move_to_pose/_action/status             # Goal status
+
+# Monitor action activity
+ros2 topic echo /move_to_pose/_action/feedback
+ros2 topic echo /move_to_pose/_action/status
+```
+
 ## Output Examples
 
-### test_trajectory Output
+### Action Server Startup
 ```
-[INFO] [test_trajectory]: ✔ Loaded kinematics.yaml parameters into node
-[INFO] [test_trajectory]: 🎯 Planning successful. Executing trajectory...
-[INFO] [test_trajectory]: 🎯 Second planning successful. Executing second trajectory...
+[INFO] [trajectory_action_server]: ✔ Loaded kinematics.yaml parameters
+[INFO] [trajectory_action_server]: ✔ Loaded 5 named poses
+[INFO] [trajectory_action_server]: 📍 Available named poses:
+[INFO] [trajectory_action_server]:   • home: [0.000, 0.000, 0.500]
+                                ◦◦◦
+[INFO] [trajectory_action_server]:   • inspect: [0.500, 0.000, 0.400]
+[INFO] [trajectory_action_server]: 🚀 Trajectory Action Server ready!
+```
+
+### Action Execution with Feedback
+```
+[INFO] [trajectory_action_client]: 🚀 Sending goal to named pose 'pick'...
+[INFO] [trajectory_action_client]: ✅ Goal accepted by server, waiting for result
+[INFO] [trajectory_action_client]: 📊 Planning trajectory to 'pick'... | Progress: 10.0% | Pose: [0.123, 0.456, 0.789]
+[INFO] [trajectory_action_client]: 📊 Executing trajectory... | Progress: 50.0% | Pose: [0.250, 0.300, 0.400]
+[INFO] [trajectory_action_client]: 📊 Moving to 'pick'... | Progress: 75.0% | Pose: [0.350, 0.180, 0.200]
+[INFO] [trajectory_action_client]: 📊 Moving to 'pick'... | Progress: 90.0% | Pose: [0.390, 0.195, 0.160]
+[INFO] [trajectory_action_client]: 🎉 Goal succeeded! Execution time: 3.45 seconds
+[INFO] [trajectory_action_client]: Final pose: [0.400, 0.200, 0.150]
 ```
 
 ### live_pose Output (Compact Mode)
@@ -289,13 +498,24 @@ ros2 param list /live_pose
 [INFO] [live_pose]: Pose: [0.12346, 0.67891, 0.54322] | Rot: [0.001, 0.000, 0.000, 1.000]
 ```
 
-### live_pose Output (Detailed Mode with Joint Values)
+### test_trajectory Output (Legacy)
 ```
-[INFO] [live_pose]: Frame: panda_link0 | Position: [x=0.12345, y=0.67890, z=0.54321] | Orientation: [x=0.000, y=0.000, z=0.000, w=1.000]
-[INFO] [live_pose]: Joints: panda_joint1=0.12 panda_joint2=-0.45 panda_joint3=0.78 panda_joint4=-1.23 panda_joint5=0.56 panda_joint6=1.89 panda_joint7=0.34
+[INFO] [test_trajectory]: ✔ Loaded kinematics.yaml parameters into node
+[INFO] [test_trajectory]: 🎯 Planning successful. Executing trajectory...
+[INFO] [test_trajectory]: 🎯 Second planning successful. Executing second trajectory...
 ```
 
 ## Parameter Reference
+
+### Action Server Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `default_planning_group` | string | "manipulator" | Default MoveIt planning group |
+| `feedback_rate_hz` | double | 10.0 | Feedback update rate in Hz |
+| `position_tolerance` | double | 0.01 | Position tolerance for goal achievement |
+
+### Live Pose Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -308,6 +528,47 @@ ros2 param list /live_pose
 | `compact_output` | bool | true | Use compact display format |
 | `max_consecutive_errors` | int | 10 | Max errors before shutdown |
 | `error_recovery_delay_ms` | int | 500 | Delay after error before retry |
+
+## Advanced Usage
+
+### Pick and Place Sequence
+```bash
+# Automated pick and place sequence
+ros2 run moveit_trajectory_executor trajectory_action_client home && \
+ros2 run moveit_trajectory_executor trajectory_action_client ready && \
+ros2 run moveit_trajectory_executor trajectory_action_client pick && \
+ros2 run moveit_trajectory_executor trajectory_action_client place && \
+ros2 run moveit_trajectory_executor trajectory_action_client home
+```
+
+### Custom Named Poses
+
+Add your own poses to `config/named_poses.yaml`:
+
+### Action Monitoring
+
+```bash
+# List available actions
+ros2 action list
+
+# Get action info
+ros2 action info /move_to_pose
+
+# Show action interface
+ros2 interface show moveit_trajectory_msgs/action/MoveToPose
+
+# Monitor all action activity
+ros2 topic echo /move_to_pose/_action/feedback
+```
+
+### Goal Cancellation
+
+```bash
+# Send a goal and cancel it
+ros2 action send_goal /move_to_pose moveit_trajectory_msgs/action/MoveToPose "{use_named_pose: true, named_pose: 'inspect', planning_group: 'manipulator', execute_immediately: true}" --feedback &
+# Wait a moment, then cancel
+ros2 action send_goal --cancel-all /move_to_pose
+```
 
 ## Troubleshooting
 
@@ -323,27 +584,62 @@ sudo apt install libyaml-cpp-dev
 
 # If ament packages are missing
 sudo apt install python3-ament-package ros-humble-ament-cmake-core
+
+# If action messages are missing
+sudo apt install ros-humble-rclcpp-action
 ```
 
 **Build errors:**
 ```bash
 # Clean build if you encounter weird errors
 rm -rf build/ install/ log/
+colcon build --packages-select moveit_trajectory_msgs moveit_trajectory_executor
+```
+
+**Action message not found:**
+```bash
+# Make sure to build moveit_trajectory_msgs first
+colcon build --packages-select moveit_trajectory_msgs
+source install/setup.bash
 colcon build --packages-select moveit_trajectory_executor
 ```
 
 ### Runtime Issues
 
-- **Planning failures**: Check if target poses are within the robot's workspace
-- **Kinematics errors**: Verify the kinematics.yaml configuration matches your robot
-- **Connection issues**: Ensure MoveIt2 move_group node is running
-- **Parameter file not found**: Check that the package is properly built and installed
-- **High CPU usage**: Increase `pose_update_rate_ms` to reduce update frequency
-- **Missing launch dependencies**: Ensure all ROS2 packages are installed as shown above
+**Action server not available:**
+- Ensure `trajectory_action_server` is running
+- Check that `moveit_trajectory_msgs` package is properly installed
+- Verify action server initialization completed successfully
+
+**Planning failures:**
+- Check if target poses are within the robot's workspace
+- Verify the kinematics.yaml configuration matches your robot
+- Ensure MoveIt2 move_group node is running
+
+**Named pose not found:**
+- Check `named_poses.yaml` file exists and is properly formatted
+- Verify pose names match exactly (case-sensitive)
+- Check server startup logs for loading errors
+
+**Connection issues:**
+- Ensure MoveIt2 move_group node is running
+- Check that planning group name matches your robot configuration
+- Verify robot description is loaded
+
+**Parameter file not found:**
+- Check that the package is properly built and installed
+- Verify config files are in the correct location
+- Use absolute paths if relative paths fail
+
+**High CPU usage (live_pose):**
+- Increase `pose_update_rate_ms` to reduce update frequency
+- Disable joint values display if not needed
+- Use compact output format
 
 ### Environment Setup
 
 Make sure to source the ROS2 environment in every new terminal:
+
 ```bash
 # Add this to your ~/.bashrc for automatic sourcing
 echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
@@ -354,11 +650,33 @@ source /opt/ros/humble/setup.bash
 source ~/your_workspace/install/setup.bash
 ```
 
+### Debug Commands
+
+```bash
+# Check action server status
+ros2 node info /trajectory_action_server
+
+# Monitor action feedback in real-time
+ros2 topic echo /move_to_pose/_action/feedback
+
+# Check parameter values
+ros2 param list /trajectory_action_server
+ros2 param get /trajectory_action_server default_planning_group
+
+# Verify named poses are loaded
+ros2 run moveit_trajectory_executor trajectory_action_server | grep "Available named poses" -A 10
+```
+
 ## Notes
 
+- **This package requires the separate `moveit_trajectory_msgs` package** for action message definitions
 - Ensure your robot's MoveIt2 configuration is properly set up
 - The `manipulator` planning group must be defined in your robot's configuration
 - Configuration files are automatically installed and can be found in the package share directory
-- Both executables support the same planning group parameter system
+- Action-based interface is the recommended approach for new applications
+- Legacy executables (`test_trajectory`) are maintained for backward compatibility
 - Launch files provide the most convenient way to manage complex parameter sets
 - This package requires ROS2 Humble or later
+- Named poses can be easily customized by editing `config/named_poses.yaml`
+- The action server provides comprehensive error handling and live feedback
+- All executables support graceful shutdown with Ctrl+C
